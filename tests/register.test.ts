@@ -393,51 +393,42 @@ describe('after a compaction', () => {
     ],
   }
 
-  // An engine whose usage read answers the breakdown once a compaction ran.
-  function compactingEngine(on: any) {
-    let compacted = false
-    mock.clock(on, { now: NOW })
-    on('session.start', () => ({ cwd: '/work' }))
-    on('session.usage', ($: unknown, e: { breakdown?: string }) => ({
-      value: {
-        startedAt: STARTED,
-        rateLimits: [FIVE],
-        context: compacted
-          ? {
-              window: 200_000,
-              ...(e?.breakdown ? { breakdown: { totalTokens: 24_000, rawMaxTokens: 200_000, maxTokens: 200_000, percentage: 12 } } : {}),
-            }
-          : { window: 200_000, tokens: 150_000, percent: 75 },
-      },
-    }))
-    on('session.measure', ($: unknown, e: { changed: string[] }) => ({ changed: e.changed }))
-    on('session.compact', () => ((compacted = true), { messages: [{ role: 'user', text: 'Summary of the conversation so far.', toolUses: [] }] }))
-    on('classic.SessionStart', () => ({}))
-    on('turn.complete', () => ({ text: '' }))
-    on('ui.render', engineBand)
+  function compactingEngine(on: any, skip?: string) {
+    engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 150_000, percent: 75 } })
+    on('session.compact', () =>
+      skip ? { skip } : { messages: [{ role: 'user', text: 'Summary of the conversation so far.', toolUses: [] }] },
+    )
   }
 
-  test('Cxt drops to a ~estimate as soon as the compaction finishes', async ($, on) => {
+  test('Cxt reads Compacted… as soon as the compaction finishes', async ($, on) => {
     compactingEngine(on)
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
     const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
     expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▱ 75% · 150k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
 
     await $.session.compact(BEFORE)
-    expect(await lineOf(ui)).toBe('Cxt ▰▱▱▱▱ ~12% · 24k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+    expect(await lineOf(ui)).toBe('Cxt Compacted…     Ses ▰▱▱▱▱ 23% · rst 2h14m')
     expect(await ui.find({ type: 'Button' })).toBeUndefined()
   })
 
-  test('an empty reading keeps the estimate; the next real one replaces it', async ($, on) => {
+  test('an empty reading keeps Compacted…; the next real one replaces it', async ($, on) => {
     compactingEngine(on)
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
     const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
     await $.session.compact(BEFORE)
 
     await $.session.measure({ context: { window: 200_000 }, rateLimits: [FIVE], changed: ['context'] })
-    expect(await lineOf(ui)).toContain('~12%')
+    expect(await lineOf(ui)).toContain('Cxt Compacted…')
 
     await $.session.measure({ context: { window: 200_000, tokens: 30_000, percent: 15 }, rateLimits: [FIVE], changed: ['context'] })
     expect(await lineOf(ui)).toBe('Cxt ▰▱▱▱▱ 15% · 30k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+  })
+
+  test('a vetoed compaction leaves the figure as it was', async ($, on) => {
+    compactingEngine(on, 'blocked by a PreCompact hook')
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await $.session.compact(BEFORE)
+    expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▱ 75% · 150k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
   })
 })

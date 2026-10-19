@@ -296,25 +296,31 @@ describe('the compact link', () => {
   })
 })
 
-describe('estimated context', () => {
-  test('drawn with a tilde in every layout', async () => {
-    expect(layouts({ rateLimits: [], context: { tokens: 24_000, window: 200_000, percent: 12, estimate: true } })).toEqual([
-      'Cxt ▰▱▱▱▱ ~12% · 24k/200k',
-      'Cxt ▰▱▱▱▱ ~12%',
-      'Cxt ~12%',
-      'cxt ~12%',
+describe('after a compaction', () => {
+  const COMPACTED = { rateLimits: [], context: { window: 200_000, compacted: true } }
+
+  test('Compacted… in place of the figure, in every layout', async () => {
+    expect(layouts(COMPACTED)).toEqual(['Cxt Compacted…', 'cxt compacted…'])
+    expect(layouts({ ...BOTH, context: { window: 200_000, compacted: true } })).toEqual([
+      'Cxt Compacted…     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%',
+      'Cxt Compacted…  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%',
+      'Cxt Compacted…  Ses 3% · rst 4h20m  Wk 8%',
+      'cxt compacted… · 5h 3% (4h20m) · 7d 8%',
     ])
   })
 
-  test('mergeUsage keeps an estimate over an empty reading, never over a real one', async () => {
-    const est = { rateLimits: [], context: { tokens: 24_000, window: 200_000, percent: 12, estimate: true } }
-    expect(mergeUsage(est, { rateLimits: [], context: { window: 200_000 } })?.context?.percent).toBe(12)
-    expect(mergeUsage(est, { rateLimits: [], context: { window: 200_000, tokens: 30_000, percent: 15 } })?.context).toEqual({
+  test('no link while compacted', async () => {
+    expect(ladderOf(COMPACTED, NOW).flat().filter((r) => r.action)).toEqual([])
+  })
+
+  test('mergeUsage keeps Compacted… over an empty reading, never over a real one', async () => {
+    expect(mergeUsage(COMPACTED, { rateLimits: [], context: { window: 200_000 } })?.context).toEqual({ window: 200_000, compacted: true })
+    expect(mergeUsage(COMPACTED, { rateLimits: [], context: { window: 200_000, tokens: 30_000, percent: 15 } })?.context).toEqual({
       window: 200_000,
       tokens: 30_000,
       percent: 15,
     })
-    // An empty reading still clears a stale real one (fresh session, /compact elsewhere).
+    // An empty reading still clears a stale real one (fresh session).
     const real = { rateLimits: [], context: { tokens: 150_000, window: 200_000, percent: 75 } }
     expect(mergeUsage(real, { rateLimits: [], context: { window: 200_000 } })?.context).toEqual({ window: 200_000 })
   })

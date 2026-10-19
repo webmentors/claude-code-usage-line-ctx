@@ -17,8 +17,9 @@ export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 // The live context window: input tokens of the last response against the
 // model's window. `tokens`/`percent` are absent until the first response of
 // the live window (a fresh session, or just after /compact).
-// `estimate` marks a local count (after /compact, before the next reply).
-export type ContextFill = { tokens?: number; window: number; percent?: number; estimate?: boolean }
+// `compacted` marks the window right after a compaction, before the next
+// reply brings its new figure: drawn as "Cxt Compacted…".
+export type ContextFill = { tokens?: number; window: number; percent?: number; compacted?: boolean }
 
 export type Usage = {
   rateLimits: readonly RateLimit[]
@@ -63,11 +64,11 @@ export function mergeUsage(prev: Usage | undefined, next: Partial<Usage> | undef
 
 const hasFill = (c: ContextFill | undefined) => !!c && (Number.isFinite(c.percent) || Number.isFinite(c.tokens))
 
-// A reading with no fill (the engine has none until the next reply) keeps a
-// local estimate already shown; a reading with a fill always replaces it.
+// A reading with no fill (the engine has none until the next reply) keeps
+// "Compacted…" on the line; a reading with a fill always replaces it.
 function contextAfter(prev: ContextFill | undefined, next: ContextFill | undefined): ContextFill | undefined {
   if (!next) return prev
-  if (!hasFill(next) && prev?.estimate && hasFill(prev)) return prev
+  if (!hasFill(next) && prev?.compacted && !next.compacted) return prev
   return next
 }
 
@@ -159,8 +160,8 @@ export type WindowView = {
   detail?: string
   // The label links to an action (the context window past compactAt).
   action?: Action
-  // The percent is a local estimate: drawn as ~42%.
-  approx?: boolean
+  // Words in place of the figure (Compacted…).
+  status?: string
 }
 
 const KINDS: Record<string, { label: string; short: string }> = {
@@ -175,6 +176,9 @@ const ORDER = ['five_hour', 'seven_day', 'spend_limit']
 export function contextOf(usage: Usage | undefined, opts: Options = DEFAULTS): WindowView | undefined {
   const c = usage?.context
   if (!opts.showContext || !c) return undefined
+  if (c.compacted && !hasFill(c)) {
+    return { kind: 'context', label: 'Cxt', short: 'cxt', percent: 0, level: 'normal', isReset: false, status: 'Compacted…' }
+  }
   let raw = c.percent
   if (!Number.isFinite(raw) && Number.isFinite(c.tokens) && Number.isFinite(c.window) && c.window > 0) {
     raw = ((c.tokens as number) / c.window) * 100
@@ -190,7 +194,6 @@ export function contextOf(usage: Usage | undefined, opts: Options = DEFAULTS): W
     level: levelOf(percent, opts),
     isReset: false,
     action: percent >= opts.compactAt ? 'compact' : undefined,
-    approx: c.estimate === true,
     detail: hasTokens ? `${formatTokens(c.tokens as number)}/${formatTokens(c.window)}` : undefined,
   }
 }
@@ -250,13 +253,17 @@ function fullRuns(windows: readonly WindowView[], withBars: boolean, withDetail 
       runs.push({ text: 'reset', tone: 'dim' })
       return runs
     }
+    if (w.status) {
+      runs.push({ text: w.status, tone: 'plain' })
+      return runs
+    }
     if (withBars) {
       const filled = filledCells(w.percent)
       if (filled > 0) runs.push({ text: '▰'.repeat(filled), tone: toneOf(w.level, 'plain') })
       if (filled < BAR_CELLS) runs.push({ text: '▱'.repeat(BAR_CELLS - filled), tone: 'dim' })
       runs.push({ text: ' ', tone: 'dim' })
     }
-    runs.push({ text: `${w.approx ? '~' : ''}${w.percent}%`.padStart(withBars ? 3 : 0), tone: toneOf(w.level, 'plain') })
+    runs.push({ text: `${w.percent}%`.padStart(withBars ? 3 : 0), tone: toneOf(w.level, 'plain') })
     if (w.detail && withDetail) runs.push({ text: ` · ${w.detail}`, tone: 'dim' })
     if (w.countdown) runs.push({ text: ` · rst ${w.countdown}`, tone: 'dim' })
     return runs
@@ -271,10 +278,14 @@ function compactRuns(windows: readonly WindowView[]): Run[] {
       runs.push({ text: `${w.short} reset`, tone: 'dim' })
       return runs
     }
+    if (w.status) {
+      runs.push({ text: `${w.short} ${w.status.toLowerCase()}`, tone: 'dim' })
+      return runs
+    }
     if (w.action) {
-      runs.push({ text: w.short, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ` ${w.approx ? '~' : ''}${w.percent}%`, tone: toneOf(w.level, 'dim') })
+      runs.push({ text: w.short, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ` ${w.percent}%`, tone: toneOf(w.level, 'dim') })
     } else {
-      runs.push({ text: `${w.short} ${w.approx ? '~' : ''}${w.percent}%`, tone: toneOf(w.level, 'dim') })
+      runs.push({ text: `${w.short} ${w.percent}%`, tone: toneOf(w.level, 'dim') })
     }
     if (w.countdown) runs.push({ text: ` (${w.countdown})`, tone: 'dim' })
     return runs
