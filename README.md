@@ -11,6 +11,7 @@ Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m    
 ```
 
 * **Cxt (context)**: how full the model's context window is, from the last response's input tokens (the same figure as the status line's `used_percentage`), with tokens used / window size. Yellow at 70%, red at 90%. It hides on a fresh session and right after `/compact` until the next reply reports a new figure. Compact form: `cxt 42%`.
+* **Compact link**: from **60%** context the `Cxt` label is underlined and pressable. Clicking it (or focusing the band with ctrl+x tab and pressing Enter) runs `/compact`, exactly as if you typed it, queued until the current reply finishes.
 
 * **Ses (session)**: how much of your current 5-hour usage window you've used, and the time left until it resets
 * **Wk (week)**: your weekly window. Its reset countdown appears once it reaches the warning level, as in `Wk ▰▰▰▰▱ 75% · rst 3d4h`.
@@ -60,14 +61,14 @@ A mod runs with your permissions, so here's exactly what this one does. `claude 
 
 ```text
 ❯ ./register.ts hooks: session.start, classic.SessionStart{source=clear|resume|fork}, turn.complete, session.measure, ui.render{component=AbovePrompt}
-❯ ./register.ts calls: $.clock.every, $.clock.now, $.session.usage (via refresh), $.ui.invalidate, $.ui.resolve
+❯ ./register.ts calls: $.clock.every, $.clock.now, $.command.run, $.session.usage (via refresh), $.ui.invalidate, $.ui.resolve, $.ui.toast
 ```
 
-In plain words, it reads the usage figures Claude Code already has (`$.session.usage()` and the `session.measure` event), keeps the latest in memory, and draws one line. It notes when a reply finishes, so it can tell an API-key session from one still waiting for its first reading. A one-minute timer asks for a redraw so the countdown stays current.
+In plain words, it reads the usage figures Claude Code already has (`$.session.usage()` and the `session.measure` event), keeps the latest in memory, and draws one line. It notes when a reply finishes, so it can tell an API-key session from one still waiting for its first reading. A one-minute timer asks for a redraw so the countdown stays current. The one thing it can *do* is run `/compact` (`$.command.run`), and only when you press the `Cxt` link; if that can't start, it shows a toast (`$.ui.toast`).
 
 The one classic hook, `classic.SessionStart`, runs only after `/clear`, `/resume` or `/branch`, because `session.start` doesn't fire again then. It re-reads the usage figures and redraws the line. It changes nothing: the event passes on exactly as it arrived, and the mod adds no context, instructions or settings to the session. The only hook whose result it changes is `ui.render` for the band above the prompt, where it adds its line under whatever is already drawn there.
 
-It does **not** read or write files, make network requests, start processes, read environment variables or settings, call a model, submit prompts, or touch tool calls. There's also nothing to configure and nothing stored on disk. Check it yourself:
+It does **not** read or write files, make network requests, start processes, read environment variables or settings, submit prompts, run any command other than the `/compact` you press, or touch tool calls. There's also nothing to configure and nothing stored on disk. Check it yourself:
 
 ```bash
 claude plugin validate ./usage-line-ctx

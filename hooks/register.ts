@@ -80,7 +80,8 @@ export function register(on: On, options: PluginOptions): void {
     const runs = runsFor(shown, await $.clock.now(), columns, opts)
     if (runs.length === 0) return next(e)
 
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const color = (r: Run) => (r.tone === 'crit' ? 'error' : r.tone === 'warn' ? 'warning' : undefined)
     const styled = (r: Run) =>
       r.tone === 'crit'
         ? Text({ color: 'error', children: [r.text] })
@@ -89,10 +90,36 @@ export function register(on: On, options: PluginOptions): void {
           : r.tone === 'dim'
             ? Text({ dimColor: true, children: [r.text] })
             : Text({ children: [r.text] })
-    const line = Box({
-      flexDirection: 'row',
-      children: [Text({ wrap: 'truncate-end', children: runs.map(styled) })],
+
+    // /compact, queued by Claude Code until the session is idle, as if typed.
+    const compact = () => {
+      void $.command.run({ command: 'compact' }).catch(() => $.ui.toast('Could not start /compact now. Try again when the reply finishes.'))
+    }
+
+    // Plain runs are grouped into Text; a run with an action becomes a link.
+    const parts: ReturnType<typeof Text | typeof Button>[] = []
+    let plain: Run[] = []
+    const flush = (last: boolean) => {
+      if (plain.length === 0) return
+      parts.push(Text(last ? { wrap: 'truncate-end', children: plain.map(styled) } : { children: plain.map(styled) }))
+      plain = []
+    }
+    runs.forEach((r) => {
+      if (r.action !== 'compact') return void plain.push(r)
+      flush(false)
+      const c = color(r)
+      parts.push(
+        Button({
+          key: 'compact',
+          plain: true,
+          children: [Text(c ? { color: c, underline: true, children: [r.text] } : { underline: true, children: [r.text] })],
+          onPress: compact,
+        }),
+      )
     })
+    flush(true)
+
+    const line = Box({ flexDirection: 'row', children: parts })
 
     // Keep what other mods draw in the band, with our line under it.
     const others = await next(e)

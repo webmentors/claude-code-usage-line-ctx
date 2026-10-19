@@ -256,3 +256,41 @@ describe('context window', () => {
     expect(layouts({ ...BOTH, context: CTX }, optionsOf({ showContext: false }))[0]).not.toContain('Cxt')
   })
 })
+
+describe('the compact link', () => {
+  const ctx = (percent: number) => ({ rateLimits: [], context: { tokens: percent * 2000, window: 200_000, percent } })
+  const linked = (usage: Usage, opts = DEFAULTS) => ladderOf(usage, NOW, opts).map((runs) => runs.filter((r) => r.action).map((r) => r.text))
+
+  test('Cxt links to /compact from 60%, in every layout', async () => {
+    expect(linked(ctx(59)).flat()).toEqual([])
+    expect(linked(ctx(60)).every((l) => l.length === 1)).toBe(true)
+    expect(linked(ctx(60)).map((l) => l[0])).toEqual(['Cxt', 'Cxt', 'Cxt', 'cxt'])
+  })
+
+  test('the link changes nothing in the text, so widths stay the same', async () => {
+    expect(layouts(ctx(65))).toEqual([
+      'Cxt ▰▰▰▱▱ 65% · 130k/200k',
+      'Cxt ▰▰▰▱▱ 65%',
+      'Cxt 65%',
+      'cxt 65%',
+    ])
+  })
+
+  test('the link takes the threshold color', async () => {
+    const link = (p: number) => ladderOf(ctx(p), NOW)[0]!.find((r) => r.action)
+    expect(link(65)).toEqual({ text: 'Cxt', tone: 'plain', action: 'compact' })
+    expect(link(75)?.tone).toBe('warn')
+    expect(link(95)?.tone).toBe('crit')
+  })
+
+  test('compactAt moves the threshold; bad values fall back to 60', async () => {
+    expect(linked(ctx(55), optionsOf({ compactAt: 50 })).flat().length).toBeGreaterThan(0)
+    expect(linked(ctx(55), optionsOf({ compactAt: 'x' })).flat()).toEqual([])
+    expect(optionsOf({ compactAt: 5000 }).compactAt).toBe(60)
+  })
+
+  test('plan windows never link', async () => {
+    const usage = { rateLimits: [{ kind: 'five_hour', percentUsed: 99 }], context: { tokens: 20_000, window: 200_000, percent: 10 } }
+    expect(linked(usage).flat()).toEqual([])
+  })
+})

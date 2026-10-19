@@ -7,7 +7,10 @@ export type Level = 'normal' | 'warn' | 'crit'
 // How a run of text is drawn: dim, the plain foreground, or a threshold color.
 export type Tone = 'dim' | 'plain' | 'warn' | 'crit'
 
-export type Run = { text: string; tone: Tone }
+// `action` marks a run drawn as a pressable link: `compact` runs /compact.
+export type Action = 'compact'
+
+export type Run = { text: string; tone: Tone; action?: Action }
 
 export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 
@@ -28,9 +31,11 @@ export type Options = {
   showCost: boolean
   warnAt: number
   critAt: number
+  // The context fill, in percent, from which the Cxt label links to /compact.
+  compactAt: number
 }
 
-export const DEFAULTS: Options = { showContext: true, showCountdown: true, showCost: true, warnAt: 70, critAt: 90 }
+export const DEFAULTS: Options = { showContext: true, showCountdown: true, showCost: true, warnAt: 70, critAt: 90, compactAt: 60 }
 
 // Cells in each mini bar.
 export const BAR_CELLS = 5
@@ -71,6 +76,7 @@ export function optionsOf(raw: Readonly<Record<string, unknown>> | undefined): O
     showCost: bool(raw?.showCost, DEFAULTS.showCost),
     warnAt: Math.min(warnAt, critAt),
     critAt: Math.max(warnAt, critAt),
+    compactAt: Math.min(100, pct(raw?.compactAt, DEFAULTS.compactAt)),
   }
 }
 
@@ -140,6 +146,8 @@ export type WindowView = {
   isReset: boolean
   // Extra figure for the full layouts (the context window's tokens).
   detail?: string
+  // The label links to an action (the context window past compactAt).
+  action?: Action
 }
 
 const KINDS: Record<string, { label: string; short: string }> = {
@@ -168,6 +176,7 @@ export function contextOf(usage: Usage | undefined, opts: Options = DEFAULTS): W
     percent,
     level: levelOf(percent, opts),
     isReset: false,
+    action: percent >= opts.compactAt ? 'compact' : undefined,
     detail: hasTokens ? `${formatTokens(c.tokens as number)}/${formatTokens(c.window)}` : undefined,
   }
 }
@@ -221,7 +230,8 @@ const NARROW_GAP = '  '
 function fullRuns(windows: readonly WindowView[], withBars: boolean, withDetail = withBars, gap = GAP): Run[] {
   return windows.flatMap((w, i) => {
     const runs: Run[] = i === 0 ? [] : [{ text: gap, tone: 'dim' }]
-    runs.push({ text: w.label + ' ', tone: 'dim' })
+    if (w.action) runs.push({ text: w.label, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ' ', tone: 'dim' })
+    else runs.push({ text: w.label + ' ', tone: 'dim' })
     if (w.isReset) {
       runs.push({ text: 'reset', tone: 'dim' })
       return runs
@@ -247,7 +257,11 @@ function compactRuns(windows: readonly WindowView[]): Run[] {
       runs.push({ text: `${w.short} reset`, tone: 'dim' })
       return runs
     }
-    runs.push({ text: `${w.short} ${w.percent}%`, tone: toneOf(w.level, 'dim') })
+    if (w.action) {
+      runs.push({ text: w.short, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ` ${w.percent}%`, tone: toneOf(w.level, 'dim') })
+    } else {
+      runs.push({ text: `${w.short} ${w.percent}%`, tone: toneOf(w.level, 'dim') })
+    }
     if (w.countdown) runs.push({ text: ` (${w.countdown})`, tone: 'dim' })
     return runs
   })

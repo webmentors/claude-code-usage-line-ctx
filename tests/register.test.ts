@@ -10,7 +10,7 @@ const STARTED = NOW - HOUR
 
 // What Claude Code passes to a ui.render hook for the band, apart from the app.
 const BAND = {
-  plugin: 'usage-line',
+  plugin: 'usage-line-ctx',
   component: 'AbovePrompt',
   viewport: { columns: 100, rows: 30 },
   props: {
@@ -340,5 +340,43 @@ describe('the bars hold on as the band narrows', () => {
     expect(await lineAt(60)).toBe('Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▱▱▱ 41%')
     expect(await lineAt(50)).toBe('Cxt 42%  Ses 23% · rst 2h14m  Wk 41%')
     expect(await lineAt(38)).toBe('cxt 42% · 5h 23% (2h14m) · 7d 41%')
+  })
+})
+
+describe('pressing Cxt', () => {
+  const FIVE = { kind: 'five_hour', percentUsed: 23, resetsAt: at(2 * HOUR + 14 * MIN) }
+
+  test('past 60% the label is a link that runs /compact', async ($, on) => {
+    engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 144_000, percent: 72 } })
+    const ran: string[] = []
+    on('command.run', ($: unknown, e: { command: string }) => (ran.push(e.command), { text: '' }))
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▱ 72% · 144k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+    expect(await ui.find({ type: 'Button' })).toBeDefined()
+    await ui.press({ key: 'compact' })
+    expect(ran).toEqual(['compact'])
+  })
+
+  test('under 60% there is nothing to press', async ($, on) => {
+    engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 84_000, percent: 42 } })
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+  })
+
+  test('if /compact cannot start, a toast says so and nothing breaks', async ($, on) => {
+    engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 190_000, percent: 95 } })
+    const toasts: string[] = []
+    on('command.run', () => {
+      throw new Error('a turn is running')
+    })
+    on('ui.toast', ($: unknown, e: { text: string }) => (toasts.push(e.text), { value: undefined }))
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await ui.press({ key: 'compact' })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(toasts).toEqual(['Could not start /compact now. Try again when the reply finishes.'])
+    expect(await lineOf(ui)).toContain('Cxt')
   })
 })
