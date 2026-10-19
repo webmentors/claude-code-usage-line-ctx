@@ -12,7 +12,7 @@
       "name": "usage-line-ctx",
       "source": "./",
       "description": "Context window fill plus Claude plan usage, one line above the prompt (fork of usage-line by Dar\u00edo Aboy).",
-      "version": "0.5.2",
+      "version": "0.5.3",
       "author": {
         "name": "Dimitar",
         "url": "https://github.com/webmentors"

@@ -432,3 +432,63 @@ describe('after a compaction', () => {
     expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▱ 75% · 150k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
   })
 })
+
+// What a live session showed: /compact raises no session.compact to plugins,
+// only command.run, and $.session.usage() keeps the old figure until the next
+// reply. These follow that sequence.
+describe('/compact as Claude Code really runs it', () => {
+  const FIVE = { kind: 'five_hour', percentUsed: 23, resetsAt: at(2 * HOUR + 14 * MIN) }
+  const BEFORE = { window: 200_000, tokens: 150_000, percent: 75 }
+  // /compact as the person types it at the prompt.
+  const TYPED = { command: 'compact', args: '', origin: { kind: 'composer' as const }, presentation: { isFullscreen: false, columns: 100 } }
+
+  function liveEngine(on: any) {
+    engine(on, { rateLimits: [FIVE], context: BEFORE })
+    // The command compacts without raising session.compact to plugins.
+    on('command.run', { command: 'compact' }, () => ({ text: 'Compacted.' }))
+  }
+
+  test('typed /compact: Compacted… as soon as the command finishes', async ($, on) => {
+    liveEngine(on)
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▱ 75% · 150k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+
+    await $.command.run(TYPED)
+    expect(await lineOf(ui)).toBe('Cxt Compacted…     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+  })
+
+  test('pressing the Cxt link: Compacted… once its /compact finishes', async ($, on) => {
+    liveEngine(on)
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await ui.press({ key: 'compact' })
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+    expect(await lineOf(ui)).toBe('Cxt Compacted…     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+  })
+
+  test('stale and empty readings keep Compacted…; the next reply replaces it', async ($, on) => {
+    liveEngine(on)
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await $.command.run(TYPED)
+
+    // usage() and any measurement still answering the pre-compaction figure
+    await $.session.measure({ context: BEFORE, rateLimits: [FIVE], changed: ['cost'] })
+    expect(await lineOf(ui)).toContain('Cxt Compacted…')
+    // the live window reset, no reply yet
+    await $.session.measure({ context: { window: 200_000 }, rateLimits: [FIVE], changed: ['context'] })
+    expect(await lineOf(ui)).toContain('Cxt Compacted…')
+    // the reply after the compaction
+    await $.session.measure({ context: { window: 200_000, tokens: 35_000, percent: 18 }, rateLimits: [FIVE], changed: ['context'] })
+    expect(await lineOf(ui)).toBe('Cxt ▰▱▱▱▱ 18% · 35k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+  })
+
+  test('/clear afterwards is not a compaction: the gauge just clears', async ($, on) => {
+    liveEngine(on)
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await $.session.measure({ context: { window: 200_000 }, rateLimits: [FIVE], changed: ['context'] })
+    expect(await lineOf(ui)).toBe('Ses ▰▱▱▱▱ 23% · rst 2h14m')
+  })
+})

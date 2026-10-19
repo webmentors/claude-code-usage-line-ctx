@@ -10,7 +10,7 @@ It draws one small line just above the prompt:
 Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▱▱▱ 41%
 ```
 
-* **Cxt (context)**: how full the model's context window is, from the last response's input tokens (the same figure as the status line's `used_percentage`), with tokens used / window size. Yellow at 70%, red at 90%. It hides on a fresh session. Right after a compaction (`/compact`, the link below, or auto-compact) it reads `Cxt Compacted…` until the next reply brings the new figure. Compact form: `cxt 42%`.
+* **Cxt (context)**: how full the model's context window is, from the last response's input tokens (the same figure as the status line's `used_percentage`), with tokens used / window size. Yellow at 70%, red at 90%. It hides on a fresh session. Right after `/compact` (typed, or the link below) it reads `Cxt Compacted…` until the next reply brings the new figure; Claude Code reports nothing new for the window before then. Auto-compaction is marked the same way where Claude Code raises it to plugins. Compact form: `cxt 42%`.
 * **Compact link**: from **60%** context the `Cxt` label is underlined and pressable. Clicking it (or focusing the band with ctrl+x tab and pressing Enter) runs `/compact`, exactly as if you typed it, queued until the current reply finishes.
 
 * **Ses (session)**: how much of your current 5-hour usage window you've used, and the time left until it resets
@@ -60,7 +60,7 @@ It shares the band above the prompt with other mods, and their content stays. Wh
 A mod runs with your permissions, so here's exactly what this one does. `claude plugin validate` reads it from the source without running it:
 
 ```text
-❯ ./register.ts hooks: session.start, classic.SessionStart{source=clear|resume|fork}, session.compact, turn.complete, session.measure, ui.render{component=AbovePrompt}
+❯ ./register.ts hooks: session.start, classic.SessionStart{source=clear|resume|fork}, command.run{command=compact}, session.compact, turn.complete, session.measure, ui.render{component=AbovePrompt}
 ❯ ./register.ts calls: $.clock.every, $.clock.now, $.command.run, $.session.usage (via refresh), $.ui.invalidate, $.ui.resolve, $.ui.toast
 ```
 

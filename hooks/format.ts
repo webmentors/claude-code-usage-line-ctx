@@ -19,7 +19,9 @@ export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 // the live window (a fresh session, or just after /compact).
 // `compacted` marks the window right after a compaction, before the next
 // reply brings its new figure: drawn as "Cxt Compacted…".
-export type ContextFill = { tokens?: number; window: number; percent?: number; compacted?: boolean }
+// `staleTokens` is the count from before the compaction: a reading that still
+// carries it is the old figure, not the new window's.
+export type ContextFill = { tokens?: number; window: number; percent?: number; compacted?: boolean; staleTokens?: number }
 
 export type Usage = {
   rateLimits: readonly RateLimit[]
@@ -68,7 +70,10 @@ const hasFill = (c: ContextFill | undefined) => !!c && (Number.isFinite(c.percen
 // "Compacted…" on the line; a reading with a fill always replaces it.
 function contextAfter(prev: ContextFill | undefined, next: ContextFill | undefined): ContextFill | undefined {
   if (!next) return prev
-  if (!hasFill(next) && prev?.compacted && !next.compacted) return prev
+  if (prev?.compacted && !next.compacted) {
+    if (!hasFill(next)) return prev
+    if (prev.staleTokens !== undefined && next.tokens === prev.staleTokens) return prev
+  }
   return next
 }
 

@@ -38,7 +38,9 @@ async function refresh($: EngineInterface): Promise<void> {
 // next reply: say so ("Cxt Compacted…") instead of the stale pre-compaction
 // figure. The next reading with a fill replaces it.
 function markCompacted(): void {
-  latest = mergeUsage(latest, { rateLimits: [], context: { window: latest?.context?.window ?? 0, compacted: true } })
+  const before = latest?.context
+  const staleTokens = before?.compacted ? before.staleTokens : before?.tokens
+  latest = mergeUsage(latest, { rateLimits: [], context: { window: before?.window ?? 0, compacted: true, staleTokens } })
 }
 
 export function register(on: On, options: PluginOptions): void {
@@ -60,8 +62,21 @@ export function register(on: On, options: PluginOptions): void {
     return next(e)
   })
 
-  // A compaction finished (/compact, the Cxt link, or auto): no turn follows,
-  // so no session.measure either: mark the gauge until the next reply.
+  // A compaction finished: no turn follows, so no session.measure either, and
+  // $.session.usage() still answers the old figure. Mark the gauge until the
+  // next reply brings the new one.
+  //
+  // /compact typed by the person: Claude Code does not raise session.compact
+  // to plugins for it, but the command itself passes through command.run and
+  // resolves once the compaction is done.
+  on('command.run', { command: 'compact' }, async ($, e, next) => {
+    const result = await next(e)
+    markCompacted()
+    if (drawn) $.ui.invalidate('ui.render')
+    return result
+  })
+
+  // Other compactions where the engine does raise the event (auto, a plugin).
   on('session.compact', async ($, e, next) => {
     const result = await next(e)
     if (e.trigger !== 'precompute' && !result.skip) {
@@ -110,8 +125,16 @@ export function register(on: On, options: PluginOptions): void {
             : Text({ children: [r.text] })
 
     // /compact, queued by Claude Code until the session is idle, as if typed.
+    // A plugin's own $.command.run skips its own command.run hook, so the
+    // link marks the gauge itself once the compaction is done.
     const compact = () => {
-      void $.command.run({ command: 'compact' }).catch(() => $.ui.toast('Could not start /compact now. Try again when the reply finishes.'))
+      void $.command.run({ command: 'compact' }).then(
+        () => {
+          markCompacted()
+          $.ui.invalidate('ui.render')
+        },
+        () => $.ui.toast('Could not start /compact now. Try again when the reply finishes.'),
+      )
     }
 
     // Plain runs are grouped into Text; a run with an action becomes a link.

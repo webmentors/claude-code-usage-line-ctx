@@ -1,6 +1,6 @@
 {
   "name": "usage-line-ctx",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "One line above the prompt: context window fill, 5-hour and weekly plan windows, and gateway spend. Fork of usage-line 0.3.1 with a context gauge.",
   "author": {
     "name": "Dimitar",
