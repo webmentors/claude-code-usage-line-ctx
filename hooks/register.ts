@@ -34,6 +34,22 @@ async function refresh($: EngineInterface): Promise<void> {
   }
 }
 
+// After a compaction the engine has no response figure for the new window
+// until the next reply. Count it locally, as /context's summary does (no
+// network, no model call), so Cxt drops at once; the next reply replaces it.
+async function refreshAfterCompact($: EngineInterface): Promise<void> {
+  try {
+    const u = await $.session.usage({ breakdown: 'summary' })
+    const b = u.context.breakdown
+    const context = b && b.rawMaxTokens > 0
+      ? { tokens: b.totalTokens, window: b.rawMaxTokens, percent: b.percentage, estimate: true }
+      : { window: u.context.window }
+    latest = mergeUsage(latest, { rateLimits: u.rateLimits, cost: u.cost, context })
+  } catch {
+    // Keep what we had; the next reply brings the real figure.
+  }
+}
+
 export function register(on: On, options: PluginOptions): void {
   const opts = optionsOf(options)
 
@@ -51,6 +67,17 @@ export function register(on: On, options: PluginOptions): void {
     await refresh($)
     if (drawn) $.ui.invalidate('ui.render')
     return next(e)
+  })
+
+  // A compaction finished (/compact, the Cxt link, or auto): no turn follows,
+  // so no session.measure either. Re-read the window now.
+  on('session.compact', async ($, e, next) => {
+    const result = await next(e)
+    if (e.trigger !== 'precompute' && !result.skip) {
+      await refreshAfterCompact($)
+      if (drawn) $.ui.invalidate('ui.render')
+    }
+    return result
   })
 
   // A reply finished: from now on, no rate limits means no plan.

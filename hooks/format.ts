@@ -17,7 +17,8 @@ export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 // The live context window: input tokens of the last response against the
 // model's window. `tokens`/`percent` are absent until the first response of
 // the live window (a fresh session, or just after /compact).
-export type ContextFill = { tokens?: number; window: number; percent?: number }
+// `estimate` marks a local count (after /compact, before the next reply).
+export type ContextFill = { tokens?: number; window: number; percent?: number; estimate?: boolean }
 
 export type Usage = {
   rateLimits: readonly RateLimit[]
@@ -56,8 +57,18 @@ export function mergeUsage(prev: Usage | undefined, next: Partial<Usage> | undef
   return {
     rateLimits,
     cost: next.cost ?? prev?.cost,
-    context: next.context ?? prev?.context,
+    context: contextAfter(prev?.context, next.context),
   }
+}
+
+const hasFill = (c: ContextFill | undefined) => !!c && (Number.isFinite(c.percent) || Number.isFinite(c.tokens))
+
+// A reading with no fill (the engine has none until the next reply) keeps a
+// local estimate already shown; a reading with a fill always replaces it.
+function contextAfter(prev: ContextFill | undefined, next: ContextFill | undefined): ContextFill | undefined {
+  if (!next) return prev
+  if (!hasFill(next) && prev?.estimate && hasFill(prev)) return prev
+  return next
 }
 
 // Reads option values, falling back to the defaults when one is missing or
@@ -148,6 +159,8 @@ export type WindowView = {
   detail?: string
   // The label links to an action (the context window past compactAt).
   action?: Action
+  // The percent is a local estimate: drawn as ~42%.
+  approx?: boolean
 }
 
 const KINDS: Record<string, { label: string; short: string }> = {
@@ -177,6 +190,7 @@ export function contextOf(usage: Usage | undefined, opts: Options = DEFAULTS): W
     level: levelOf(percent, opts),
     isReset: false,
     action: percent >= opts.compactAt ? 'compact' : undefined,
+    approx: c.estimate === true,
     detail: hasTokens ? `${formatTokens(c.tokens as number)}/${formatTokens(c.window)}` : undefined,
   }
 }
@@ -242,7 +256,7 @@ function fullRuns(windows: readonly WindowView[], withBars: boolean, withDetail 
       if (filled < BAR_CELLS) runs.push({ text: '▱'.repeat(BAR_CELLS - filled), tone: 'dim' })
       runs.push({ text: ' ', tone: 'dim' })
     }
-    runs.push({ text: `${w.percent}%`.padStart(withBars ? 3 : 0), tone: toneOf(w.level, 'plain') })
+    runs.push({ text: `${w.approx ? '~' : ''}${w.percent}%`.padStart(withBars ? 3 : 0), tone: toneOf(w.level, 'plain') })
     if (w.detail && withDetail) runs.push({ text: ` · ${w.detail}`, tone: 'dim' })
     if (w.countdown) runs.push({ text: ` · rst ${w.countdown}`, tone: 'dim' })
     return runs
@@ -258,9 +272,9 @@ function compactRuns(windows: readonly WindowView[]): Run[] {
       return runs
     }
     if (w.action) {
-      runs.push({ text: w.short, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ` ${w.percent}%`, tone: toneOf(w.level, 'dim') })
+      runs.push({ text: w.short, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ` ${w.approx ? '~' : ''}${w.percent}%`, tone: toneOf(w.level, 'dim') })
     } else {
-      runs.push({ text: `${w.short} ${w.percent}%`, tone: toneOf(w.level, 'dim') })
+      runs.push({ text: `${w.short} ${w.approx ? '~' : ''}${w.percent}%`, tone: toneOf(w.level, 'dim') })
     }
     if (w.countdown) runs.push({ text: ` (${w.countdown})`, tone: 'dim' })
     return runs

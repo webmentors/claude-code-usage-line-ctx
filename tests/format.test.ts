@@ -6,6 +6,7 @@ import {
   formatRemaining,
   isTimeDependent,
   ladderOf,
+  mergeUsage,
   layoutsOf,
   levelOf,
   optionsOf,
@@ -292,5 +293,29 @@ describe('the compact link', () => {
   test('plan windows never link', async () => {
     const usage = { rateLimits: [{ kind: 'five_hour', percentUsed: 99 }], context: { tokens: 20_000, window: 200_000, percent: 10 } }
     expect(linked(usage).flat()).toEqual([])
+  })
+})
+
+describe('estimated context', () => {
+  test('drawn with a tilde in every layout', async () => {
+    expect(layouts({ rateLimits: [], context: { tokens: 24_000, window: 200_000, percent: 12, estimate: true } })).toEqual([
+      'Cxt ▰▱▱▱▱ ~12% · 24k/200k',
+      'Cxt ▰▱▱▱▱ ~12%',
+      'Cxt ~12%',
+      'cxt ~12%',
+    ])
+  })
+
+  test('mergeUsage keeps an estimate over an empty reading, never over a real one', async () => {
+    const est = { rateLimits: [], context: { tokens: 24_000, window: 200_000, percent: 12, estimate: true } }
+    expect(mergeUsage(est, { rateLimits: [], context: { window: 200_000 } })?.context?.percent).toBe(12)
+    expect(mergeUsage(est, { rateLimits: [], context: { window: 200_000, tokens: 30_000, percent: 15 } })?.context).toEqual({
+      window: 200_000,
+      tokens: 30_000,
+      percent: 15,
+    })
+    // An empty reading still clears a stale real one (fresh session, /compact elsewhere).
+    const real = { rateLimits: [], context: { tokens: 150_000, window: 200_000, percent: 75 } }
+    expect(mergeUsage(real, { rateLimits: [], context: { window: 200_000 } })?.context).toEqual({ window: 200_000 })
   })
 })
