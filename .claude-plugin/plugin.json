@@ -1,0 +1,23 @@
+{
+  "name": "usage-line-ctx",
+  "version": "0.4.0",
+  "description": "One line above the prompt: context window fill, 5-hour and weekly plan windows, and gateway spend. Fork of usage-line 0.3.1 with a context gauge.",
+  "author": {
+    "name": "Dimitar",
+    "url": "https://github.com/webmentors"
+  },
+  "homepage": "https://github.com/webmentors/claude-code-usage-line-ctx",
+  "repository": "https://github.com/webmentors/claude-code-usage-line-ctx",
+  "documentationUrl": "https://github.com/webmentors/claude-code-usage-line-ctx#readme",
+  "supportUrl": "https://github.com/webmentors/claude-code-usage-line-ctx/issues",
+  "privacyPolicyUrl": "https://github.com/webmentors/claude-code-usage-line-ctx#privacy",
+  "license": "MIT",
+  "keywords": [
+    "usage",
+    "rate-limit",
+    "status",
+    "plan",
+    "mod",
+    "context"
+  ]
+}

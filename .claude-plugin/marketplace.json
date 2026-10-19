@@ -1,0 +1,33 @@
+{
+  "name": "webmentors",
+  "owner": {
+    "name": "Dimitar",
+    "url": "https://github.com/webmentors"
+  },
+  "metadata": {
+    "description": "Claude Code plugins by webmentors"
+  },
+  "plugins": [
+    {
+      "name": "usage-line-ctx",
+      "source": "./",
+      "description": "Context window fill plus Claude plan usage, one line above the prompt (fork of usage-line by Dar\u00edo Aboy).",
+      "version": "0.4.0",
+      "author": {
+        "name": "Dimitar",
+        "url": "https://github.com/webmentors"
+      },
+      "homepage": "https://github.com/webmentors/claude-code-usage-line-ctx",
+      "repository": "https://github.com/webmentors/claude-code-usage-line-ctx",
+      "license": "MIT",
+      "keywords": [
+        "usage",
+        "rate-limit",
+        "status",
+        "plan",
+        "mod"
+      ],
+      "category": "productivity"
+    }
+  ]
+}
