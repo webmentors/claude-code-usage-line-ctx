@@ -21,7 +21,15 @@ export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 // reply brings its new figure: drawn as "Cxt Compacted…".
 // `staleTokens` is the count from before the compaction: a reading that still
 // carries it is the old figure, not the new window's.
-export type ContextFill = { tokens?: number; window: number; percent?: number; compacted?: boolean; staleTokens?: number }
+// `compacting` marks a compaction still running: drawn as "Cxt Compacting…".
+export type ContextFill = {
+  tokens?: number
+  window: number
+  percent?: number
+  compacting?: boolean
+  compacted?: boolean
+  staleTokens?: number
+}
 
 export type Usage = {
   rateLimits: readonly RateLimit[]
@@ -62,6 +70,12 @@ export function mergeUsage(prev: Usage | undefined, next: Partial<Usage> | undef
     cost: next.cost ?? prev?.cost,
     context: contextAfter(prev?.context, next.context),
   }
+}
+
+// The figures as drawn while a compaction runs: the context reads Compacting…
+// whatever reading is held, and the plan windows stay as they are.
+export function withCompacting(usage: Usage | undefined): Usage {
+  return { rateLimits: usage?.rateLimits ?? [], cost: usage?.cost, context: { window: usage?.context?.window ?? 0, compacting: true } }
 }
 
 const hasFill = (c: ContextFill | undefined) => !!c && (Number.isFinite(c.percent) || Number.isFinite(c.tokens))
@@ -181,6 +195,9 @@ const ORDER = ['five_hour', 'seven_day', 'spend_limit']
 export function contextOf(usage: Usage | undefined, opts: Options = DEFAULTS): WindowView | undefined {
   const c = usage?.context
   if (!opts.showContext || !c) return undefined
+  if (c.compacting) {
+    return { kind: 'context', label: 'Cxt', short: 'cxt', percent: 0, level: 'normal', isReset: false, status: 'Compacting…' }
+  }
   if (c.compacted && !hasFill(c)) {
     return { kind: 'context', label: 'Cxt', short: 'cxt', percent: 0, level: 'normal', isReset: false, status: 'Compacted…' }
   }

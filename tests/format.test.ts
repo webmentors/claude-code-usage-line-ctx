@@ -7,6 +7,7 @@ import {
   isTimeDependent,
   ladderOf,
   mergeUsage,
+  withCompacting,
   layoutsOf,
   levelOf,
   optionsOf,
@@ -323,5 +324,22 @@ describe('after a compaction', () => {
     // An empty reading still clears a stale real one (fresh session).
     const real = { rateLimits: [], context: { tokens: 150_000, window: 200_000, percent: 75 } }
     expect(mergeUsage(real, { rateLimits: [], context: { window: 200_000 } })?.context).toEqual({ window: 200_000 })
+  })
+})
+
+describe('compacting', () => {
+  test('Compacting… in every layout, plan windows kept, no link', async () => {
+    const usage = withCompacting({ ...BOTH, context: { tokens: 150_000, window: 200_000, percent: 75 } })
+    expect(layouts(usage)).toEqual([
+      'Cxt Compacting…     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%',
+      'Cxt Compacting…  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%',
+      'Cxt Compacting…  Ses 3% · rst 4h20m  Wk 8%',
+      'cxt compacting… · 5h 3% (4h20m) · 7d 8%',
+    ])
+    expect(ladderOf(usage, NOW).flat().filter((r) => r.action)).toEqual([])
+  })
+
+  test('shown even before any context reading', async () => {
+    expect(layouts(withCompacting(undefined))).toEqual(['Cxt Compacting…', 'cxt compacting…'])
   })
 })

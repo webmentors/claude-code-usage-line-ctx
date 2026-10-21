@@ -492,3 +492,82 @@ describe('/compact as Claude Code really runs it', () => {
     expect(await lineOf(ui)).toBe('Ses ▰▱▱▱▱ 23% · rst 2h14m')
   })
 })
+
+describe('Compacting… while the compaction runs', () => {
+  const FIVE = { kind: 'five_hour', percentUsed: 23, resetsAt: at(2 * HOUR + 14 * MIN) }
+  const TYPED = { command: 'compact', args: '', origin: { kind: 'composer' as const }, presentation: { isFullscreen: false, columns: 100 } }
+  const tick = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+  }
+
+  // A /compact that runs until the test lets it finish (or fail).
+  function slowCompact(on: any) {
+    engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 150_000, percent: 75 } })
+    const gate: { finish: () => void; fail: (err: Error) => void } = { finish: () => {}, fail: () => {} }
+    on('command.run', { command: 'compact' }, () =>
+      new Promise((resolve, reject) => {
+        gate.finish = () => resolve({ text: 'Compacted.' })
+        gate.fail = reject
+      }),
+    )
+    return gate
+  }
+
+  test('press Cxt: Compacting…, then Compacted…', async ($, on) => {
+    const gate = slowCompact(on)
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▱ 75% · 150k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+
+    await ui.press({ key: 'compact' })
+    await tick()
+    expect(await lineOf(ui)).toBe('Cxt Compacting…     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+
+    gate.finish()
+    await tick()
+    expect(await lineOf(ui)).toBe('Cxt Compacted…     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+  })
+
+  test('typed /compact goes the same way', async ($, on) => {
+    const gate = slowCompact(on)
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+    const run = $.command.run(TYPED)
+    await tick()
+    expect(await lineOf(ui)).toBe('Cxt Compacting…     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+    gate.finish()
+    await run
+    expect(await lineOf(ui)).toBe('Cxt Compacted…     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+  })
+
+  test('a reply finishing mid-compaction does not interrupt Compacting…', async ($, on) => {
+    const gate = slowCompact(on)
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await ui.press({ key: 'compact' })
+    await tick()
+    await $.session.measure({ context: { window: 200_000, tokens: 160_000, percent: 80 }, rateLimits: [FIVE], changed: ['context'] })
+    expect(await lineOf(ui)).toContain('Cxt Compacting…')
+    gate.finish()
+    await tick()
+    expect(await lineOf(ui)).toContain('Cxt Compacted…')
+  })
+
+  test('a failed compaction goes back to the figure, with a toast', async ($, on) => {
+    const gate = slowCompact(on)
+    const toasts: string[] = []
+    on('ui.toast', ($: unknown, e: { text: string }) => (toasts.push(e.text), { value: undefined }))
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await ui.press({ key: 'compact' })
+    await tick()
+    expect(await lineOf(ui)).toContain('Cxt Compacting…')
+
+    gate.fail(new Error('a turn is running'))
+    await tick()
+    expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▱ 75% · 150k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+    expect(toasts).toEqual(['Could not start /compact now. Try again when the reply finishes.'])
+  })
+})

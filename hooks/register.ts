@@ -7,7 +7,7 @@
 
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 
-import { isTimeDependent, mergeUsage, optionsOf, runsFor } from './format'
+import { isTimeDependent, mergeUsage, optionsOf, runsFor, withCompacting } from './format'
 import type { Run, Usage } from './format'
 
 // One redraw a minute keeps the countdown honest while the session is idle.
@@ -37,6 +37,10 @@ async function refresh($: EngineInterface): Promise<void> {
 // After a compaction the engine has no figure for the new window until the
 // next reply: say so ("Cxt Compacted…") instead of the stale pre-compaction
 // figure. The next reading with a fill replaces it.
+// Set while a compaction runs (from the press or the command's start until it
+// resolves or fails): the gauge reads "Cxt Compacting…".
+let compacting = false
+
 function markCompacted(): void {
   const before = latest?.context
   const staleTokens = before?.compacted ? before.staleTokens : before?.tokens
@@ -70,20 +74,32 @@ export function register(on: On, options: PluginOptions): void {
   // to plugins for it, but the command itself passes through command.run and
   // resolves once the compaction is done.
   on('command.run', { command: 'compact' }, async ($, e, next) => {
-    const result = await next(e)
-    markCompacted()
+    compacting = true
     if (drawn) $.ui.invalidate('ui.render')
-    return result
+    try {
+      const result = await next(e)
+      markCompacted()
+      return result
+    } finally {
+      compacting = false
+      if (drawn) $.ui.invalidate('ui.render')
+    }
   })
 
   // Other compactions where the engine does raise the event (auto, a plugin).
   on('session.compact', async ($, e, next) => {
-    const result = await next(e)
-    if (e.trigger !== 'precompute' && !result.skip) {
-      markCompacted()
+    if (e.trigger === 'precompute') return next(e)
+    const wasCompacting = compacting
+    compacting = true
+    if (drawn) $.ui.invalidate('ui.render')
+    try {
+      const result = await next(e)
+      if (!result.skip) markCompacted()
+      return result
+    } finally {
+      compacting = wasCompacting
       if (drawn) $.ui.invalidate('ui.render')
     }
-    return result
   })
 
   // A reply finished: from now on, no rate limits means no plan.
@@ -109,7 +125,8 @@ export function register(on: On, options: PluginOptions): void {
     drawn = true
 
     const columns = e.props.bodyColumns > BAND_MARGIN ? e.props.bodyColumns - BAND_MARGIN : undefined
-    const shown = answered || !latest ? latest : { rateLimits: latest.rateLimits, context: latest.context }
+    const held = answered || !latest ? latest : { rateLimits: latest.rateLimits, context: latest.context }
+    const shown = compacting ? withCompacting(held) : held
     const runs = runsFor(shown, await $.clock.now(), columns, opts)
     if (runs.length === 0) return next(e)
 
@@ -128,12 +145,20 @@ export function register(on: On, options: PluginOptions): void {
     // A plugin's own $.command.run skips its own command.run hook, so the
     // link marks the gauge itself once the compaction is done.
     const compact = () => {
+      if (compacting) return
+      compacting = true
+      $.ui.invalidate('ui.render')
       void $.command.run({ command: 'compact' }).then(
         () => {
+          compacting = false
           markCompacted()
           $.ui.invalidate('ui.render')
         },
-        () => $.ui.toast('Could not start /compact now. Try again when the reply finishes.'),
+        () => {
+          compacting = false
+          $.ui.invalidate('ui.render')
+          $.ui.toast('Could not start /compact now. Try again when the reply finishes.')
+        },
       )
     }
 
