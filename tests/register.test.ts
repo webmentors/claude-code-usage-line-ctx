@@ -76,7 +76,7 @@ describe('the band', () => {
       const engineLine = await ui.find({ type: 'Text', text: 'drawn by Claude Code' })
       expect(engineLine).toBeDefined()
       const root = await ui.find({ type: 'Box' })
-      expect(textOf(root)).toBe('drawn by Claude CodeSes ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▱▱▱ 41%')
+      expect(textOf(root)).toBe('drawn by Claude CodeSes ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▰▱▱▱▱ 41%')
       await ui.unmount()
     }
   })
@@ -214,7 +214,7 @@ describe('the band', () => {
     on('ui.render', engineBand)
     await $.classic.SessionStart({ source: 'clear' })
     const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await lineOf(ui)).toBe('Wk ▰▱▱▱▱ 11%')
+    expect(await lineOf(ui)).toBe('Wk ▰▱▱▱▱▱▱ 11%')
   })
 })
 
@@ -306,7 +306,7 @@ describe('readings that leave out the plan windows', () => {
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
     const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
     await $.session.measure({ context: { window: 200_000, tokens: 84_000, percent: 42 }, rateLimits: [], changed: ['context'] })
-    expect(await lineOf(ui)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▱▱▱ 41%')
+    expect(await lineOf(ui)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▰▱▱▱▱ 41%')
   })
 
   test('windows that really left (changed names rateLimits) do leave', async ($, on) => {
@@ -335,11 +335,17 @@ describe('the bars hold on as the band narrows', () => {
       await ui.unmount()
       return line
     }
-    expect(await lineAt(80)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▱▱▱ 41%')
-    expect(await lineAt(70)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▱▱▱ 41%')
-    expect(await lineAt(60)).toBe('Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▱▱▱ 41%')
-    expect(await lineAt(50)).toBe('Cxt 42%  Ses 23% · rst 2h14m  Wk 41%')
-    expect(await lineAt(38)).toBe('cxt 42% · 5h 23% (2h14m) · 7d 41%')
+    // Band widths, cut-off points exact: each layout at its minimum, and one less.
+    expect(await lineAt(120)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▰▱▱▱▱ 41%')
+    expect(await lineAt(77)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▰▱▱▱▱ 41%')
+    expect(await lineAt(76)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▰▱▱▱▱ 41%')
+    expect(await lineAt(71)).toBe('Cxt ▰▰▱▱▱ 42% · 84k/200k  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▰▱▱▱▱ 41%')
+    expect(await lineAt(70)).toBe('Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▰▱▱▱▱ 41%')
+    expect(await lineAt(60)).toBe('Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▰▱▱▱▱ 41%')
+    expect(await lineAt(59)).toBe('Cxt 42%  Ses 23% · rst 2h14m  Wk 41%')
+    expect(await lineAt(40)).toBe('Cxt 42%  Ses 23% · rst 2h14m  Wk 41%')
+    expect(await lineAt(39)).toBe('cxt 42% · 5h 23% (2h14m) · 7d 41%')
+    expect(await lineAt(20)).toBe('cxt 42% · 5h 23% (2h14m) · 7d 41%')
   })
 })
 

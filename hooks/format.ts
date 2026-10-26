@@ -51,6 +51,13 @@ export const DEFAULTS: Options = { showContext: true, showCountdown: true, showC
 
 // Cells in each mini bar.
 export const BAR_CELLS = 5
+// The weekly window gets a cell per day.
+export const WEEK_CELLS = 7
+
+// Cells in a window's bar.
+export function cellsOf(kind: string): number {
+  return kind === 'seven_day' ? WEEK_CELLS : BAR_CELLS
+}
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -152,9 +159,9 @@ export function formatCost(usd: number): string {
 
 // Filled cells for a percent: any use shows at least one, and a full bar
 // means the window is full.
-export function filledCells(percent: number): number {
+export function filledCells(percent: number, cells: number = BAR_CELLS): number {
   if (percent <= 0) return 0
-  return Math.min(BAR_CELLS, Math.max(1, Math.round((percent * BAR_CELLS) / 100)))
+  return Math.min(cells, Math.max(1, Math.round((percent * cells) / 100)))
 }
 
 // Milliseconds until `resetsAt`, or undefined when it is absent or unreadable.
@@ -280,9 +287,10 @@ function fullRuns(windows: readonly WindowView[], withBars: boolean, withDetail 
       return runs
     }
     if (withBars) {
-      const filled = filledCells(w.percent)
+      const cells = cellsOf(w.kind)
+      const filled = filledCells(w.percent, cells)
       if (filled > 0) runs.push({ text: '▰'.repeat(filled), tone: toneOf(w.level, 'plain') })
-      if (filled < BAR_CELLS) runs.push({ text: '▱'.repeat(BAR_CELLS - filled), tone: 'dim' })
+      if (filled < cells) runs.push({ text: '▱'.repeat(cells - filled), tone: 'dim' })
       runs.push({ text: ' ', tone: 'dim' })
     }
     runs.push({ text: `${w.percent}%`.padStart(withBars ? 3 : 0), tone: toneOf(w.level, 'plain') })

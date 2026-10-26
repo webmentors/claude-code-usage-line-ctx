@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import {
+  cellsOf,
   DEFAULTS,
   filledCells,
   formatRemaining,
@@ -51,23 +52,29 @@ describe('reset formatting', () => {
 
 describe('bars', () => {
   test('any use shows a cell, and the bar never overflows', async () => {
-    expect([0, 3, 8, 15, 75, 92, 100, 112].map(filledCells)).toEqual([0, 1, 1, 1, 4, 5, 5, 5])
+    expect([0, 3, 8, 15, 75, 92, 100, 112].map((p) => filledCells(p))).toEqual([0, 1, 1, 1, 4, 5, 5, 5])
+  })
+  test('the weekly bar has a cell per day', async () => {
+    expect(cellsOf('seven_day')).toBe(7)
+    expect(cellsOf('five_hour')).toBe(5)
+    expect(cellsOf('context')).toBe(5)
+    expect([0, 3, 8, 15, 41, 50, 75, 92, 100, 112].map((p) => filledCells(p, 7))).toEqual([0, 1, 1, 1, 3, 4, 5, 6, 7, 7])
   })
 })
 
 describe('layouts', () => {
   test('both windows, richest to most compact', async () => {
     expect(layouts(BOTH)).toEqual([
-      'Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%',
-      'Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%',
+      'Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱▱▱  8%',
+      'Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱▱▱  8%',
       'Ses 3% · rst 4h20m  Wk 8%',
       '5h 3% (4h20m) · 7d 8%',
     ])
   })
 
   test('the widest layout that fits is chosen', async () => {
-    expect(textOf(runsFor(BOTH, NOW, 120))).toBe('Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%')
-    expect(textOf(runsFor(BOTH, NOW, 40))).toBe('Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%')
+    expect(textOf(runsFor(BOTH, NOW, 120))).toBe('Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱▱▱  8%')
+    expect(textOf(runsFor(BOTH, NOW, 42))).toBe('Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱▱▱  8%')
     expect(textOf(runsFor(BOTH, NOW, 30))).toBe('Ses 3% · rst 4h20m  Wk 8%')
     expect(textOf(runsFor(BOTH, NOW, 24))).toBe('5h 3% (4h20m) · 7d 8%')
     expect(textOf(runsFor(BOTH, NOW, 10))).toBe('5h 3% (4h20m) · 7d 8%')
@@ -81,7 +88,7 @@ describe('layouts', () => {
 
   test('only the weekly window, with no countdown while it is cool', async () => {
     const usage = { rateLimits: [{ kind: 'seven_day', percentUsed: 12, resetsAt: at(2 * DAY) }] }
-    expect(layouts(usage)[0]).toBe('Wk ▰▱▱▱▱ 12%')
+    expect(layouts(usage)[0]).toBe('Wk ▰▱▱▱▱▱▱ 12%')
   })
 
   test('hot windows: colors on bar and percent, weekly countdown appears', async () => {
@@ -92,12 +99,12 @@ describe('layouts', () => {
       ],
     }
     const [full] = layoutsOf(usage, NOW)
-    expect(textOf(full ?? [])).toBe('Ses ▰▰▰▰▱ 75% · rst 1h05m     Wk ▰▰▰▰▰ 92% · rst 2d3h')
+    expect(textOf(full ?? [])).toBe('Ses ▰▰▰▰▱ 75% · rst 1h05m     Wk ▰▰▰▰▰▰▱ 92% · rst 2d3h')
     const toned = (full ?? []).filter((r) => r.tone === 'warn' || r.tone === 'crit')
     expect(toned).toEqual([
       { text: '▰▰▰▰', tone: 'warn' },
       { text: '75%', tone: 'warn' },
-      { text: '▰▰▰▰▰', tone: 'crit' },
+      { text: '▰▰▰▰▰▰', tone: 'crit' },
       { text: '92%', tone: 'crit' },
     ])
   })
@@ -121,8 +128,8 @@ describe('layouts', () => {
       ],
     }
     expect(layouts(usage)).toEqual([
-      'Ses reset     Wk ▰▰▱▱▱ 41%',
-      'Ses reset  Wk ▰▰▱▱▱ 41%',
+      'Ses reset     Wk ▰▰▰▱▱▱▱ 41%',
+      'Ses reset  Wk ▰▰▰▱▱▱▱ 41%',
       'Ses reset  Wk 41%',
       '5h reset · 7d 41%',
     ])
@@ -192,23 +199,23 @@ describe('context window', () => {
 
   test('context comes first, with tokens in the richest layout', async () => {
     expect(layouts({ ...BOTH, context: CTX })).toEqual([
-      'Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%',
-      'Cxt ▰▰▱▱▱ 42% · 84k/200k  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%',
-      'Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%',
+      'Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱▱▱  8%',
+      'Cxt ▰▰▱▱▱ 42% · 84k/200k  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱▱▱  8%',
+      'Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱▱▱  8%',
       'Cxt 42%  Ses 3% · rst 4h20m  Wk 8%',
       'cxt 42% · 5h 3% (4h20m) · 7d 8%',
     ])
   })
 
   test('narrow terminals fall back to the compact form', async () => {
-    expect(textOf(runsFor({ ...BOTH, context: CTX }, NOW, 60))).toBe('Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%')
+    expect(textOf(runsFor({ ...BOTH, context: CTX }, NOW, 60))).toBe('Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱▱▱  8%')
     expect(textOf(runsFor({ ...BOTH, context: CTX }, NOW, 40))).toBe('Cxt 42%  Ses 3% · rst 4h20m  Wk 8%')
     expect(textOf(runsFor({ ...BOTH, context: CTX }, NOW, 33))).toBe('cxt 42% · 5h 3% (4h20m) · 7d 8%')
   })
 
   test('no reading yet (fresh session or just compacted): context stays out', async () => {
     expect(layouts({ ...BOTH, context: { window: 200_000 } })[0]).toBe(
-      'Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%',
+      'Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱▱▱  8%',
     )
   })
 
@@ -303,8 +310,8 @@ describe('after a compaction', () => {
   test('Compacted… in place of the figure, in every layout', async () => {
     expect(layouts(COMPACTED)).toEqual(['Cxt Compacted…', 'cxt compacted…'])
     expect(layouts({ ...BOTH, context: { window: 200_000, compacted: true } })).toEqual([
-      'Cxt Compacted…     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%',
-      'Cxt Compacted…  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%',
+      'Cxt Compacted…     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱▱▱  8%',
+      'Cxt Compacted…  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱▱▱  8%',
       'Cxt Compacted…  Ses 3% · rst 4h20m  Wk 8%',
       'cxt compacted… · 5h 3% (4h20m) · 7d 8%',
     ])
@@ -331,8 +338,8 @@ describe('compacting', () => {
   test('Compacting… in every layout, plan windows kept, no link', async () => {
     const usage = withCompacting({ ...BOTH, context: { tokens: 150_000, window: 200_000, percent: 75 } })
     expect(layouts(usage)).toEqual([
-      'Cxt Compacting…     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%',
-      'Cxt Compacting…  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱  8%',
+      'Cxt Compacting…     Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱▱▱  8%',
+      'Cxt Compacting…  Ses ▰▱▱▱▱  3% · rst 4h20m  Wk ▰▱▱▱▱▱▱  8%',
       'Cxt Compacting…  Ses 3% · rst 4h20m  Wk 8%',
       'cxt compacting… · 5h 3% (4h20m) · 7d 8%',
     ])

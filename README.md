@@ -7,17 +7,17 @@ Fork of [usage-line 0.3.1](https://github.com/daboy-dev/claude-code-usage-line) 
 It draws one small line just above the prompt:
 
 ```text
-Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▱▱▱ 41%
+Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m     Wk ▰▰▰▱▱▱▱ 41%
 ```
 
 * **Cxt (context)**: how full the model's context window is, from the last response's input tokens (the same figure as the status line's `used_percentage`), with tokens used / window size. Yellow at 70%, red at 90%. It hides on a fresh session. While `/compact` runs (typed, or the link below) it reads `Cxt Compacting…`; once it's done, `Cxt Compacted…` until the next reply brings the new figure; Claude Code reports nothing new for the window before then. Auto-compaction is marked the same way where Claude Code raises it to plugins. Compact form: `cxt 42%`.
 * **Compact link**: from **60%** context the `Cxt` label is underlined and pressable. Clicking it (or focusing the band with ctrl+x tab and pressing Enter) runs `/compact`, exactly as if you typed it, queued until the current reply finishes. The label switches to `Cxt Compacting…` at once, so you can see the press landed.
 
 * **Ses (session)**: how much of your current 5-hour usage window you've used, and the time left until it resets
-* **Wk (week)**: your weekly window. Its reset countdown appears once it reaches the warning level, as in `Wk ▰▰▰▰▱ 75% · rst 3d4h`.
+* **Wk (week)**: your weekly window, with a 7-cell bar (one per day; the others have 5). Its reset countdown appears once it reaches the warning level, as in `Wk ▰▰▰▰▰▱▱ 75% · rst 3d4h`.
 * **Spend**: shown too if you use Claude through a gateway that has a spend limit
 * **Colors**: a window's bar and percent turn your theme's warning color (yellow) at **70%** and its error color (red) at **90%**. Labels stay dim.
-* **Narrow windows**: the line gives up the least it can at each step: first the gaps tighten (`Cxt ▰▰▱▱▱ 42% · 84k/200k  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▱▱▱ 41%`), then the token counts go (`Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▱▱▱ 41%`, about 58 columns), then the bars (`Cxt 42%  Ses 23% · rst 2h14m  Wk 41%`), and last the compact form (`cxt 42% · 5h 23% (2h14m) · 7d 41%`).
+* **Narrow windows**: the line gives up the least it can at each step: first the gaps tighten (`Cxt ▰▰▱▱▱ 42% · 84k/200k  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▰▱▱▱▱ 41%`), then the token counts go (`Cxt ▰▰▱▱▱ 42%  Ses ▰▱▱▱▱ 23% · rst 2h14m  Wk ▰▰▰▱▱▱▱ 41%`, about 60 columns), then the bars (`Cxt 42%  Ses 23% · rst 2h14m  Wk 41%`), and last the compact form (`cxt 42% · 5h 23% (2h14m) · 7d 41%`).
 * **No plan figures**: before Claude Code has any readings, it shows nothing. If a reply finishes and there are still no plan figures (you sign in with an API key), it shows the session cost instead, such as `Ses cost $0.12`.
 * **After a reset**: when a window's reset time has passed, it shows `Ses reset` until fresh figures arrive
 
