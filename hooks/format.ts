@@ -10,7 +10,9 @@ export type Tone = 'dim' | 'plain' | 'warn' | 'crit'
 // `action` marks a run drawn as a pressable link: `compact` runs /compact.
 export type Action = 'compact'
 
-export type Run = { text: string; tone: Tone; action?: Action }
+// Runs that share an action are drawn as one pressable link; `underline`
+// marks the part drawn underlined (the label), so it reads as a link.
+export type Run = { text: string; tone: Tone; action?: Action; underline?: boolean }
 
 export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 
@@ -275,16 +277,17 @@ const NARROW_GAP = '  '
 // Ses ▰▱▱▱▱  3% · rst 4h20m     Wk ▰▱▱▱▱  8%
 function fullRuns(windows: readonly WindowView[], withBars: boolean, withDetail = withBars, gap = GAP): Run[] {
   return windows.flatMap((w, i) => {
-    const runs: Run[] = i === 0 ? [] : [{ text: gap, tone: 'dim' }]
-    if (w.action) runs.push({ text: w.label, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ' ', tone: 'dim' })
+    const gapRuns: Run[] = i === 0 ? [] : [{ text: gap, tone: 'dim' }]
+    const runs: Run[] = []
+    if (w.action) runs.push({ text: w.label, tone: toneOf(w.level, 'plain'), underline: true }, { text: ' ', tone: 'dim' })
     else runs.push({ text: w.label + ' ', tone: 'dim' })
     if (w.isReset) {
       runs.push({ text: 'reset', tone: 'dim' })
-      return runs
+      return [...gapRuns, ...runs]
     }
     if (w.status) {
       runs.push({ text: w.status, tone: 'plain' })
-      return runs
+      return [...gapRuns, ...runs]
     }
     if (withBars) {
       const cells = cellsOf(w.kind)
@@ -296,8 +299,13 @@ function fullRuns(windows: readonly WindowView[], withBars: boolean, withDetail 
     runs.push({ text: `${w.percent}%`.padStart(withBars ? 3 : 0), tone: toneOf(w.level, 'plain') })
     if (w.detail && withDetail) runs.push({ text: ` · ${w.detail}`, tone: 'dim' })
     if (w.countdown) runs.push({ text: ` · rst ${w.countdown}`, tone: 'dim' })
-    return runs
+    return [...gapRuns, ...linked(runs, w.action)]
   })
+}
+
+// The whole window (label, bar, percent, tokens) as one link, when it has one.
+function linked(runs: Run[], action: Action | undefined): Run[] {
+  return action ? runs.map((r) => ({ ...r, action })) : runs
 }
 
 // 5h 23% (2h14m) · 7d 41%
@@ -313,7 +321,9 @@ function compactRuns(windows: readonly WindowView[]): Run[] {
       return runs
     }
     if (w.action) {
-      runs.push({ text: w.short, tone: toneOf(w.level, 'plain'), action: w.action }, { text: ` ${w.percent}%`, tone: toneOf(w.level, 'dim') })
+      runs.push(
+        ...linked([{ text: w.short, tone: toneOf(w.level, 'plain'), underline: true }, { text: ` ${w.percent}%`, tone: toneOf(w.level, 'dim') }], w.action),
+      )
     } else {
       runs.push({ text: `${w.short} ${w.percent}%`, tone: toneOf(w.level, 'dim') })
     }

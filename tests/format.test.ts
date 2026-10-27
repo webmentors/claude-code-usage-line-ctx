@@ -268,12 +268,14 @@ describe('context window', () => {
 
 describe('the compact link', () => {
   const ctx = (percent: number) => ({ rateLimits: [], context: { tokens: percent * 2000, window: 200_000, percent } })
-  const linked = (usage: Usage, opts = DEFAULTS) => ladderOf(usage, NOW, opts).map((runs) => runs.filter((r) => r.action).map((r) => r.text))
+  // The text of each layout's link (its action runs joined), '' for none.
+  const linked = (usage: Usage, opts = DEFAULTS) =>
+    ladderOf(usage, NOW, opts).map((runs) => runs.filter((r) => r.action).map((r) => r.text).join(''))
 
   test('Cxt links to /compact from 60%, in every layout', async () => {
-    expect(linked(ctx(59)).flat()).toEqual([])
-    expect(linked(ctx(60)).every((l) => l.length === 1)).toBe(true)
-    expect(linked(ctx(60)).map((l) => l[0])).toEqual(['Cxt', 'Cxt', 'Cxt', 'cxt'])
+    expect(linked(ctx(59)).join('')).toBe('')
+    // The whole segment is the link: label, bar, percent and tokens.
+    expect(linked(ctx(60))).toEqual(['Cxt ▰▰▰▱▱ 60% · 120k/200k', 'Cxt ▰▰▰▱▱ 60%', 'Cxt 60%', 'cxt 60%'])
   })
 
   test('the link changes nothing in the text, so widths stay the same', async () => {
@@ -285,22 +287,34 @@ describe('the compact link', () => {
     ])
   })
 
-  test('the link takes the threshold color', async () => {
-    const link = (p: number) => ladderOf(ctx(p), NOW)[0]!.find((r) => r.action)
-    expect(link(65)).toEqual({ text: 'Cxt', tone: 'plain', action: 'compact' })
-    expect(link(75)?.tone).toBe('warn')
-    expect(link(95)?.tone).toBe('crit')
+  test('only the label is underlined; the link keeps the threshold colors', async () => {
+    const link = (p: number) => ladderOf(ctx(p), NOW)[0]!.filter((r) => r.action)
+    expect(link(65)[0]).toEqual({ text: 'Cxt', tone: 'plain', action: 'compact', underline: true })
+    expect(link(65).filter((r) => r.underline).map((r) => r.text)).toEqual(['Cxt'])
+    expect(link(75).find((r) => r.text.startsWith('▰'))?.tone).toBe('warn')
+    expect(link(95).find((r) => r.text.endsWith('%'))?.tone).toBe('crit')
+  })
+
+  test('the gap and the next window stay outside the link', async () => {
+    const usage = { ...BOTH, context: { tokens: 130_000, window: 200_000, percent: 65 } }
+    for (const runs of ladderOf(usage, NOW)) {
+      const text = runs.filter((r) => r.action).map((r) => r.text).join('')
+      expect(text.startsWith('Cxt') || text.startsWith('cxt')).toBe(true)
+      expect(text).not.toContain('Ses')
+      expect(text).not.toContain('5h')
+      expect(text.endsWith(' ')).toBe(false)
+    }
   })
 
   test('compactAt moves the threshold; bad values fall back to 60', async () => {
-    expect(linked(ctx(55), optionsOf({ compactAt: 50 })).flat().length).toBeGreaterThan(0)
-    expect(linked(ctx(55), optionsOf({ compactAt: 'x' })).flat()).toEqual([])
+    expect(linked(ctx(55), optionsOf({ compactAt: 50 })).join('')).not.toBe('')
+    expect(linked(ctx(55), optionsOf({ compactAt: 'x' })).join('')).toBe('')
     expect(optionsOf({ compactAt: 5000 }).compactAt).toBe(60)
   })
 
   test('plan windows never link', async () => {
     const usage = { rateLimits: [{ kind: 'five_hour', percentUsed: 99 }], context: { tokens: 20_000, window: 200_000, percent: 10 } }
-    expect(linked(usage).flat()).toEqual([])
+    expect(linked(usage).join('')).toBe('')
   })
 })
 

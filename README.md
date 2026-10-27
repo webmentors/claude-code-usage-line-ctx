@@ -11,7 +11,7 @@ Cxt ▰▰▱▱▱ 42% · 84k/200k     Ses ▰▱▱▱▱ 23% · rst 2h14m    
 ```
 
 * **Cxt (context)**: how full the model's context window is, from the last response's input tokens (the same figure as the status line's `used_percentage`), with tokens used / window size. Yellow at 70%, red at 90%. It hides on a fresh session. While `/compact` runs (typed, or the link below) it reads `Cxt Compacting…`; once it's done, `Cxt Compacted…` until the next reply brings the new figure; Claude Code reports nothing new for the window before then. Auto-compaction is marked the same way where Claude Code raises it to plugins. Compact form: `cxt 42%`.
-* **Compact link**: from **60%** context the `Cxt` label is underlined and pressable. Clicking it (or focusing the band with ctrl+x tab and pressing Enter) runs `/compact`, exactly as if you typed it, queued until the current reply finishes. The label switches to `Cxt Compacting…` at once, so you can see the press landed.
+* **Compact link**: from **60%** context the whole `Cxt` gauge (label, bar, percent and tokens) is pressable, with the label underlined. Clicking it (or focusing the band with ctrl+x tab and pressing Enter) runs `/compact`, exactly as if you typed it, queued until the current reply finishes. The label switches to `Cxt Compacting…` at once, so you can see the press landed.
 
 * **Ses (session)**: how much of your current 5-hour usage window you've used, and the time left until it resets
 * **Wk (week)**: your weekly window, with a 7-cell bar (one per day; the others have 5). Its reset countdown appears once it reaches the warning level, as in `Wk ▰▰▰▰▰▱▱ 75% · rst 3d4h`.

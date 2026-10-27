@@ -364,6 +364,20 @@ describe('pressing Cxt', () => {
     expect(ran).toEqual(['compact'])
   })
 
+  test('the link holds the label, bar, percent and tokens, not Ses', async ($, on) => {
+    engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 144_000, percent: 72 } })
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    const button = await ui.find({ type: 'Button' })
+    expect(textOf(button)).toBe('Cxt ▰▰▰▰▱ 72% · 144k/200k')
+    expect(runOf(button, 'Cxt')?.props).toEqual({ color: 'warning', underline: true })
+    expect(runOf(button, '▰▰▰▰')?.props).toEqual({ color: 'warning' })
+    // Narrow band: still the whole Cxt segment.
+    await ui.unmount()
+    const narrow = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 30 } })
+    expect(textOf(await narrow.find({ type: 'Button' }))).toBe('cxt 72%')
+  })
+
   test('under 60% there is nothing to press', async ($, on) => {
     engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 84_000, percent: 42 } })
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })

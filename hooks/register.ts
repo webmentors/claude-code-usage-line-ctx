@@ -131,15 +131,11 @@ export function register(on: On, options: PluginOptions): void {
     if (runs.length === 0) return next(e)
 
     const { Box, Text, Button } = $.ui.resolve(e)
-    const color = (r: Run) => (r.tone === 'crit' ? 'error' : r.tone === 'warn' ? 'warning' : undefined)
-    const styled = (r: Run) =>
-      r.tone === 'crit'
-        ? Text({ color: 'error', children: [r.text] })
-        : r.tone === 'warn'
-          ? Text({ color: 'warning', children: [r.text] })
-          : r.tone === 'dim'
-            ? Text({ dimColor: true, children: [r.text] })
-            : Text({ children: [r.text] })
+    const styled = (r: Run) => {
+      const tone =
+        r.tone === 'crit' ? { color: 'error' as const } : r.tone === 'warn' ? { color: 'warning' as const } : r.tone === 'dim' ? { dimColor: true } : {}
+      return Text({ ...tone, ...(r.underline ? { underline: true } : {}), children: [r.text] })
+    }
 
     // /compact, queued by Claude Code until the session is idle, as if typed.
     // A plugin's own $.command.run skips its own command.run hook, so the
@@ -162,26 +158,20 @@ export function register(on: On, options: PluginOptions): void {
       )
     }
 
-    // Plain runs are grouped into Text; a run with an action becomes a link.
+    // Plain runs are grouped into Text; the runs of a window with an action
+    // (label, bar, percent, tokens) are grouped into one pressable link.
     const parts: ReturnType<typeof Text | typeof Button>[] = []
-    let plain: Run[] = []
+    let group: Run[] = []
     const flush = (last: boolean) => {
-      if (plain.length === 0) return
-      parts.push(Text(last ? { wrap: 'truncate-end', children: plain.map(styled) } : { children: plain.map(styled) }))
-      plain = []
+      if (group.length === 0) return
+      const children = group.map(styled)
+      if (group[0]?.action === 'compact') parts.push(Button({ key: 'compact', plain: true, children, onPress: compact }))
+      else parts.push(Text(last ? { wrap: 'truncate-end', children } : { children }))
+      group = []
     }
     runs.forEach((r) => {
-      if (r.action !== 'compact') return void plain.push(r)
-      flush(false)
-      const c = color(r)
-      parts.push(
-        Button({
-          key: 'compact',
-          plain: true,
-          children: [Text(c ? { color: c, underline: true, children: [r.text] } : { underline: true, children: [r.text] })],
-          onPress: compact,
-        }),
-      )
+      if (group.length > 0 && group[0]?.action !== r.action) flush(false)
+      group.push(r)
     })
     flush(true)
 
