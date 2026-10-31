@@ -378,6 +378,33 @@ describe('pressing Cxt', () => {
     expect(textOf(await narrow.find({ type: 'Button' }))).toBe('cxt 72%')
   })
 
+  test('desktop: only the label is the button, so the gauge keeps its colours', async ($, on) => {
+    engine(on, { rateLimits: [FIVE], context: { window: 1_000_000, tokens: 919_000, percent: 92 } })
+    const ran: string[] = []
+    on('command.run', ($: unknown, e: { command: string }) => (ran.push(e.command), { text: '' }))
+    await $.session.start({ surface: 'desktop', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    expect(await lineOf(ui)).toBe('Cxt ▰▰▰▰▰ 92% · 919k/1M     Ses ▰▱▱▱▱ 23% · rst 2h14m')
+    const button = await ui.find({ type: 'Button' })
+    expect(textOf(button)).toBe('Cxt')
+    // The bar and percent are drawn outside it, in the critical colour.
+    const root = await ui.find({ type: 'Box' })
+    expect(runOf(root, '▰▰▰▰▰')?.props).toEqual({ color: 'error' })
+    expect(runOf(root, '92%')?.props).toEqual({ color: 'error' })
+    expect(runOf(button, '▰▰▰▰▰')).toBeUndefined()
+    await ui.press({ key: 'compact' })
+    expect(ran).toEqual(['compact'])
+  })
+
+  test('terminal: the whole gauge is the link', async ($, on) => {
+    engine(on, { rateLimits: [FIVE], context: { window: 1_000_000, tokens: 919_000, percent: 92 } })
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    const button = await ui.find({ type: 'Button' })
+    expect(textOf(button)).toBe('Cxt ▰▰▰▰▰ 92% · 919k/1M')
+    expect(runOf(button, '▰▰▰▰▰')?.props).toEqual({ color: 'error' })
+  })
+
   test('under 60% there is nothing to press', async ($, on) => {
     engine(on, { rateLimits: [FIVE], context: { window: 200_000, tokens: 84_000, percent: 42 } })
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })

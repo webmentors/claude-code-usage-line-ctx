@@ -169,7 +169,12 @@ export function register(on: On, options: PluginOptions): void {
       else parts.push(Text(last ? { wrap: 'truncate-end', children } : { children }))
       group = []
     }
-    runs.forEach((r) => {
+    // The terminal colours what a link holds, so the whole gauge is the link
+    // there. Other surfaces draw a Button natively, in one colour, so only
+    // the label is the link and the bar, percent and tokens keep their colours.
+    const wholeLink = e.surface === 'terminal'
+    const shownRuns = wholeLink ? runs : runs.map((r) => (r.action && !r.underline ? { ...r, action: undefined } : r))
+    shownRuns.forEach((r) => {
       if (group.length > 0 && group[0]?.action !== r.action) flush(false)
       group.push(r)
     })
